@@ -11,6 +11,7 @@ import Services from './pages/Services';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import NotFound from './pages/NotFound';
 
 // Protected Pages
 import Dashboard from './pages/Dashboard';
@@ -49,6 +50,9 @@ function App() {
               </AdminGuard>
             } 
           />
+          
+          {/* 404 Catch-All - MUST BE LAST */}
+          <Route path="*" element={<Layout><NotFound /></Layout>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

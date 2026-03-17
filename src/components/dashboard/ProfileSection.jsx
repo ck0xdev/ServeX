@@ -1,7 +1,8 @@
 // src/components/dashboard/ProfileSection.jsx
 import { useState, useEffect } from 'react';
-import { User, Mail, Calendar, Crown, Edit3, Check } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
+import { User, Mail, Calendar, Crown, Edit3, Check, X, Loader } from 'lucide-react';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth';
 import { db } from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
@@ -12,11 +13,13 @@ export default function ProfileSection() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [editData, setEditData] = useState({ displayName: '' });
 
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user?.uid) return;
-      
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
@@ -28,9 +31,46 @@ export default function ProfileSection() {
         setLoading(false);
       }
     };
-
     fetchUserData();
   }, [user]);
+
+  const handleEditStart = () => {
+    setEditData({ displayName: user?.displayName || '' });
+    setSaveError('');
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setSaveError('');
+  };
+
+  const handleSave = async () => {
+    if (!editData.displayName.trim()) {
+      setSaveError('Name cannot be empty');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError('');
+
+    try {
+      // Update Firebase Auth profile
+      await updateProfile(user, { displayName: editData.displayName.trim() });
+
+      // Update Firestore user doc
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: editData.displayName.trim(),
+      });
+
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setSaveError('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -40,7 +80,7 @@ export default function ProfileSection() {
     );
   }
 
-  const memberSince = userData?.createdAt 
+  const memberSince = userData?.createdAt
     ? format(userData.createdAt.toDate(), 'MMMM yyyy')
     : 'Recently';
 
@@ -52,27 +92,37 @@ export default function ProfileSection() {
           <User size={24} className="text-primary" />
           Profile
         </h2>
-        <Button 
-          variant="secondary" 
-          size="sm"
-          onClick={() => setIsEditing(!isEditing)}
-        >
-          {isEditing ? (
-            <><Check size={16} /> Done</>
-          ) : (
-            <><Edit3 size={16} /> Edit</>
-          )}
-        </Button>
+
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={handleCancel} disabled={isSaving}>
+              <X size={16} /> Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={handleEditStart}>
+            <Edit3 size={16} /> Edit
+          </Button>
+        )}
       </div>
+
+      {/* Save Error */}
+      {saveError && (
+        <div className="mb-4 p-3 rounded-xl bg-error/10 border border-error/30 text-error text-sm">
+          {saveError}
+        </div>
+      )}
 
       {/* Profile Card */}
       <div className="neu-pressed rounded-xl p-6 md:p-8 mb-6">
         <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
-          {/* Avatar */}
           <div className="neu-circle w-24 h-24 text-3xl font-bold text-primary">
             {user?.displayName?.charAt(0) || 'U'}
           </div>
-          
           <div className="text-center md:text-left">
             <h3 className="text-xl font-semibold text-textPrimary mb-1">
               {user?.displayName || 'User'}
@@ -87,6 +137,7 @@ export default function ProfileSection() {
 
         {/* Info Grid */}
         <div className="grid md:grid-cols-2 gap-4">
+          {/* Full Name — editable */}
           <div className="neu-card p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="neu-circle w-8 h-8">
@@ -94,11 +145,23 @@ export default function ProfileSection() {
               </div>
               <span className="text-sm text-textSecondary">Full Name</span>
             </div>
-            <p className="font-medium text-textPrimary pl-11">
-              {user?.displayName || 'Not set'}
-            </p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editData.displayName}
+                onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
+                className="neu-input text-sm font-medium text-textPrimary w-full ml-11"
+                placeholder="Enter your name"
+                autoFocus
+              />
+            ) : (
+              <p className="font-medium text-textPrimary pl-11">
+                {user?.displayName || 'Not set'}
+              </p>
+            )}
           </div>
 
+          {/* Email — read only */}
           <div className="neu-card p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="neu-circle w-8 h-8">
@@ -111,6 +174,7 @@ export default function ProfileSection() {
             </p>
           </div>
 
+          {/* Member Since — read only */}
           <div className="neu-card p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="neu-circle w-8 h-8">
@@ -118,11 +182,10 @@ export default function ProfileSection() {
               </div>
               <span className="text-sm text-textSecondary">Member Since</span>
             </div>
-            <p className="font-medium text-textPrimary pl-11">
-              {memberSince}
-            </p>
+            <p className="font-medium text-textPrimary pl-11">{memberSince}</p>
           </div>
 
+          {/* Account Type — read only */}
           <div className="neu-card p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="neu-circle w-8 h-8">

@@ -1,4 +1,5 @@
-// src/pages/Contact.jsx
+console.log('Contact page loaded!');
+// src/pages/Contact.jsx - GUEST SUPPORT VERSION
 import { useState } from 'react';
 import { 
   Mail, 
@@ -8,23 +9,27 @@ import {
   CheckCircle, 
   AlertCircle,
   User,
-  MessageSquare
+  MessageSquare,
+  Info,
+  Clock
 } from 'lucide-react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
 import Input from '../components/Input';
 
 export default function Contact() {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
+    name: user?.displayName || '',
+    email: user?.email || '',
     service: '',
     message: '',
   });
   const [formErrors, setFormErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error' | null
+  const [submitStatus, setSubmitStatus] = useState(null);
 
   const services = [
     'Web Development',
@@ -69,6 +74,7 @@ export default function Contact() {
     
     setIsLoading(true);
     try {
+      // Save message - works for both guests and logged-in users
       await addDoc(collection(db, 'messages'), {
         name: formData.name,
         email: formData.email,
@@ -76,6 +82,9 @@ export default function Contact() {
         message: formData.message,
         createdAt: serverTimestamp(),
         status: 'pending',
+        // Track if user was logged in
+        isGuest: !user,
+        userId: user?.uid || null,
       });
       
       setSubmitStatus('success');
@@ -112,36 +121,58 @@ export default function Contact() {
     {
       icon: MapPin,
       label: 'Address',
-      value: 'Your City, India',
+      value: 'Surat, India',
       href: '#',
     },
   ];
 
   return (
-    <div className="container-custom py-8">
+    <div className="container-custom py-8 page-transition">
       {/* Page Header */}
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-textPrimary mb-4">Contact Us</h1>
         <p className="text-textSecondary max-w-xl mx-auto">
-          Have a project in mind? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+          Have a project in mind? We'd love to hear from you. 
+          {!user && ' No account required - send as a guest!'}
         </p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
         {/* Contact Form */}
-        <div className="neu-card p-6 md:p-8">
+        <div className="neu-card p-6 md:p-8 hover-lift">
           <h2 className="text-xl font-semibold text-textPrimary mb-6 flex items-center gap-2">
             <MessageSquare size={20} className="text-primary" />
             Send Message
           </h2>
 
+          {/* Guest Info Banner */}
+          {!user && (
+            <div className="neu-pressed bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6 flex items-start gap-3">
+              <Info size={20} className="text-primary flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-textPrimary font-medium">Sending as Guest</p>
+                <p className="text-xs text-textSecondary mt-1">
+                  You can send messages without logging in. 
+                  <a href="/login" className="text-primary hover:underline ml-1">
+                    Login for dashboard access
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Success Message */}
           {submitStatus === 'success' && (
-            <div className="neu-pressed bg-success/10 border-2 border-success rounded-xl p-4 mb-6 flex items-center gap-3">
+            <div className="neu-pressed bg-success/10 border-2 border-success rounded-xl p-4 mb-6 flex items-center gap-3 animate-bounce">
               <CheckCircle className="text-success flex-shrink-0" size={20} />
               <div>
-                <p className="text-success font-medium">Message Sent!</p>
-                <p className="text-success/80 text-sm">We'll get back to you soon.</p>
+                <p className="text-success font-medium">Message Sent Successfully!</p>
+                <p className="text-success/80 text-sm">
+                  {user 
+                    ? "Check your dashboard for updates." 
+                    : "We'll reply to your email soon."
+                  }
+                </p>
               </div>
             </div>
           )}
@@ -244,10 +275,10 @@ export default function Contact() {
               variant="primary"
               size="lg"
               loading={isLoading}
-              className="w-full"
+              className="w-full hover-glow"
             >
-              Send Message
-              <Send size={18} />
+              {isLoading ? 'Sending...' : 'Send Message'}
+              {!isLoading && <Send size={18} />}
             </Button>
           </form>
         </div>
@@ -262,35 +293,53 @@ export default function Contact() {
             <a
               key={item.label}
               href={item.href}
-              className="neu-card p-5 flex items-center gap-4 hover:translate-y-[-2px] transition-transform block"
+              className="neu-card p-5 flex items-center gap-4 hover-lift block group"
             >
-              <div className="neu-circle w-12 h-12 flex-shrink-0">
+              <div className="neu-circle w-12 h-12 flex-shrink-0 group-hover:scale-110 group-hover:rotate-6 transition-transform">
                 <item.icon size={20} className="text-primary" />
               </div>
               <div>
                 <p className="text-sm text-textSecondary mb-1">{item.label}</p>
-                <p className="font-medium text-textPrimary">{item.value}</p>
+                <p className="font-medium text-textPrimary group-hover:text-primary transition-colors">
+                  {item.value}
+                </p>
               </div>
             </a>
           ))}
 
           {/* Working Hours */}
-          <div className="neu-pressed rounded-xl p-5 mt-6">
-            <h3 className="font-semibold text-textPrimary mb-3">Working Hours</h3>
+          <div className="neu-pressed rounded-xl p-5 mt-6 hover-lift">
+            <h3 className="font-semibold text-textPrimary mb-3 flex items-center gap-2">
+              <Clock size={18} className="text-primary" />
+              Working Hours
+            </h3>
             <ul className="space-y-2 text-sm text-textSecondary">
-              <li className="flex justify-between">
+              <li className="flex justify-between items-center py-1 border-b border-shadowDark/20">
                 <span>Monday - Friday</span>
-                <span>9:00 AM - 6:00 PM</span>
+                <span className="font-medium text-textPrimary">9:00 AM - 6:00 PM</span>
               </li>
-              <li className="flex justify-between">
+              <li className="flex justify-between items-center py-1 border-b border-shadowDark/20">
                 <span>Saturday</span>
-                <span>10:00 AM - 4:00 PM</span>
+                <span className="font-medium text-textPrimary">10:00 AM - 4:00 PM</span>
               </li>
-              <li className="flex justify-between">
+              <li className="flex justify-between items-center py-1">
                 <span>Sunday</span>
-                <span>Closed</span>
+                <span className="font-medium text-error">Closed</span>
               </li>
             </ul>
+          </div>
+
+          {/* Quick Response Promise */}
+          <div className="neu-card p-5 bg-gradient-to-br from-primary/5 to-transparent border border-primary/20">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="neu-circle w-10 h-10 bg-primary/10">
+                <CheckCircle size={18} className="text-primary" />
+              </div>
+              <h3 className="font-semibold text-textPrimary">Quick Response</h3>
+            </div>
+            <p className="text-sm text-textSecondary">
+              We typically respond to all inquiries within 24 hours during business days.
+            </p>
           </div>
         </div>
       </div>
